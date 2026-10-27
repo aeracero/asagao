@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Asagao 目覚ましの設定</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%235653D4'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='white'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <!-- ログイン画面 -->
+  <section id="login" class="login" hidden>
+    <div class="login-card">
+      <svg class="flower big" viewBox="0 0 32 32" aria-hidden="true"><use href="#flower"/></svg>
+      <h1>Asagao</h1>
+      <p>Discordのアカウントでログインすると、自分の目覚ましを1週間のタイムラインに置けます。</p>
+      <p id="login-error" class="error" hidden></p>
+      <a class="btn primary wide" href="/login">Discordでログイン</a>
+    </div>
+  </section>
+
+  <!-- メイン画面 -->
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="flower" viewBox="0 0 32 32" aria-hidden="true"><use href="#flower"/></svg>
+        <span>Asagao</span>
+      </div>
+      <div id="legend" class="legend" aria-label="VCの色分け"></div>
+      <div class="top-actions">
+        <button id="btn-sounds" class="btn ghost" type="button">音声</button>
+        <div class="me">
+          <img id="me-avatar" alt="" width="28" height="28" hidden>
+          <span id="me-name"></span>
+        </div>
+        <button id="btn-logout" class="btn link" type="button">ログアウト</button>
+      </div>
+    </header>
+
+    <p id="paused-banner" class="banner" hidden>いまは全アラームを一時停止しています。Discordで <code>/alarm resume</code> を実行すると再開します。</p>
+    <p class="hint">空いている時間をドラッグすると、その長さのアラームを置けます。箱の上端で鳴り始め、下端で自動的にVCから抜けます。</p>
+
+    <nav id="daytabs" class="daytabs" hidden></nav>
+
+    <main class="layout">
+      <section class="board"><div id="calendar"></div></section>
+
+      <aside id="panel" class="panel" hidden aria-labelledby="panel-title">
+        <form id="alarm-form" novalidate>
+          <div class="panel-head">
+            <h2 id="panel-title">アラームの設定</h2>
+            <button type="button" class="icon-btn" id="panel-close" aria-label="閉じる">✕</button>
+          </div>
+
+          <p id="conflict-note" class="warn" hidden>同じサーバーの別のVCで、時間が重なっているアラームがあります。botは同時に1つのVCにしか入れないため、後のアラームは前のアラームが終わるまで待ちます。</p>
+          <p id="novc-note" class="warn" hidden>VCが選ばれていないので、このアラームは鳴りません。</p>
+
+          <div class="field row">
+            <label for="f-label">名前</label>
+            <input id="f-label" name="label" maxlength="40" placeholder="例: 平日の1限">
+          </div>
+          <label class="switch">
+            <input type="checkbox" name="enabled">
+            <span>このアラームを使う</span>
+          </label>
+
+          <div class="field">
+            <label for="f-channel">VC</label>
+            <select id="f-channel" name="channel_id"></select>
+          </div>
+
+          <div class="field two">
+            <div>
+              <label for="f-start">鳴り始め</label>
+              <input id="f-start" name="start" type="time" step="300" required>
+            </div>
+            <div>
+              <label for="f-end">自動退出</label>
+              <input id="f-end" name="end" type="time" step="300" required>
+            </div>
+          </div>
+
+          <fieldset>
+            <legend>音声</legend>
+            <div id="sound-checks" class="checks"></div>
+            <div class="radios">
+              <label><input type="radio" name="sound_mode" value="random"> 毎回ランダム</label>
+              <label><input type="radio" name="sound_mode" value="fixed"> いちばん上の音声</label>
+            </div>
+            <button type="button" class="btn link small" id="open-sounds-from-panel">音声を追加・管理する</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>音量</legend>
+            <div id="volume-seg" class="segmented" role="radiogroup" aria-label="音量"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>鳴らし方</legend>
+            <div class="field two">
+              <div>
+                <label for="f-play-count">再生回数</label>
+                <input id="f-play-count" name="play_count" type="number" min="0" max="20" inputmode="numeric">
+                <small>0 にすると止めるまで</small>
+              </div>
+              <div>
+                <label for="f-play-interval">間隔（秒）</label>
+                <input id="f-play-interval" name="play_interval" type="number" min="0" max="120" inputmode="numeric">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>スヌーズ</legend>
+            <div class="field two">
+              <div>
+                <label for="f-snooze-count">回数</label>
+                <input id="f-snooze-count" name="snooze_count" type="number" min="0" max="10" inputmode="numeric">
+              </div>
+              <div>
+                <label for="f-snooze-interval">間隔（分）</label>
+                <input id="f-snooze-interval" name="snooze_interval" type="number" min="1" max="60" inputmode="numeric">
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" name="snooze_leave"> スヌーズ中は一度VCから抜ける</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>止め方</legend>
+            <div class="radios">
+              <label><input type="radio" name="stop_mode" value="button"> 「止める」ボタン</label>
+              <label><input type="radio" name="stop_mode" value="quiz"> 計算問題に正解したら止まる</label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>入室と退出</legend>
+            <div class="field two">
+              <div>
+                <label for="f-join-offset">何秒前に入室</label>
+                <input id="f-join-offset" name="join_offset" type="number" min="0" max="60" inputmode="numeric">
+              </div>
+              <div>
+                <label for="f-leave-delay">鳴り終わって抜けるまで（秒）</label>
+                <input id="f-leave-delay" name="leave_delay" type="number" min="0" max="60" inputmode="numeric">
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" name="require_user_in_vc"> 自分がVCにいるときだけ鳴らす</label>
+            <div class="field row indent">
+              <label for="f-wait">いなかったら待つ（分）</label>
+              <input id="f-wait" name="wait_for_user" type="number" min="0" max="30" inputmode="numeric">
+            </div>
+            <label class="check"><input type="checkbox" name="leave_on_user_leave"> 自分がVCから抜けたら止める</label>
+          </fieldset>
+
+          <label id="group-apply" class="check group" hidden>
+            <input type="checkbox" name="apply_group" checked>
+            <span>コピーした他の曜日の箱にも、同じ設定を反映する</span>
+          </label>
+
+          <div class="actions">
+            <button type="submit" class="btn primary">保存する</button>
+            <button type="button" class="btn ghost" id="btn-test">テストで鳴らす</button>
+          </div>
+
+          <fieldset class="copy">
+            <legend>ほかの曜日にコピー</legend>
+            <div id="copy-days" class="days"></div>
+            <div class="copy-actions">
+              <button type="button" class="btn link small" data-preset="weekdays">平日</button>
+              <button type="button" class="btn link small" data-preset="all">全曜日</button>
+              <button type="button" class="btn ghost small" id="btn-copy">選んだ曜日にコピー</button>
+            </div>
+          </fieldset>
+
+          <div class="danger-zone">
+            <button type="button" class="btn danger-link" id="btn-delete">このアラームを削除</button>
+          </div>
+        </form>
+      </aside>
+    </main>
+  </div>
+
+  <!-- 音声の管理 -->
+  <dialog id="sounds-dialog" class="dialog" aria-labelledby="sounds-title">
+    <div class="panel-head">
+      <h2 id="sounds-title">音声</h2>
+      <button type="button" class="icon-btn" id="sounds-close" aria-label="閉じる">✕</button>
+    </div>
+    <form id="upload-form" class="upload">
+      <label class="file-drop">
+        <input type="file" name="file" accept="audio/*,.mp3,.wav,.ogg,.opus,.m4a,.aac,.flac,.webm" required>
+        <span id="file-label">ファイルを選ぶ（5MB・3分まで）</span>
+      </label>
+      <input name="name" maxlength="40" placeholder="表示名（空ならファイル名）">
+      <button type="submit" class="btn primary">アップロード</button>
+      <progress id="upload-progress" max="100" value="0" hidden></progress>
+      <p id="upload-error" class="error" hidden></p>
+    </form>
+    <ul id="sound-list" class="sound-list"></ul>
+    <p class="note">アップロードした音声は、音量5段階ぶんを事前に変換して保存します。変換中でもアラームは鳴ります。</p>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="flower" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="14" fill="currentColor"/>
+      <path d="M16 2.5v8.5M28.8 11.8l-8.1 2.6M23.9 27l-5-6.9M8.1 27l5-6.9M3.2 11.8l8.1 2.6"
+            stroke="#fff" stroke-opacity=".45" stroke-width="1.4" fill="none"/>
+      <circle cx="16" cy="16" r="4.5" fill="#fff"/>
+    </symbol>
+  </svg>
+</body>
+</html>
